@@ -720,114 +720,114 @@ function SurveyPage() {
   }
 
   async function fetchNextQuestion(mode) {
-    if (!currentQuestion || transitionState !== "idle") {
-      return;
-    }
+  if (!currentQuestion || transitionState !== "idle") return;
 
-    const answerValue = normalizeValue(currentQuestion, answersMap[currentQuestion.key]);
-    const inlineOtherQuestion = findInlineOtherQuestion(
-      currentQuestion,
-      allQuestions,
-      answerValue
+  const answerValue = normalizeValue(
+    currentQuestion,
+    answersMap[currentQuestion.key]
+  );
+
+  const inlineOtherQuestion = findInlineOtherQuestion(
+    currentQuestion,
+    allQuestions,
+    answerValue
+  );
+
+  const inlineOtherValue = inlineOtherQuestion
+    ? normalizeValue(inlineOtherQuestion, answersMap[inlineOtherQuestion.key])
+    : "";
+
+  const currentQuestionError = getQuestionError(currentQuestion, answerValue);
+  if (currentQuestionError) {
+    setErrorMessage(currentQuestionError);
+    return;
+  }
+
+  if (inlineOtherQuestion) {
+    const inlineError = getQuestionError(
+      inlineOtherQuestion,
+      inlineOtherValue
     );
-    const inlineOtherValue = inlineOtherQuestion
-      ? normalizeValue(inlineOtherQuestion, answersMap[inlineOtherQuestion.key])
-      : "";
 
-    const currentQuestionError = getQuestionError(currentQuestion, answerValue);
-    if (currentQuestionError) {
-      setErrorMessage(currentQuestionError);
+    if (inlineError) {
+      setErrorMessage(inlineError);
       return;
     }
+  }
 
-    if (inlineOtherQuestion) {
-      const inlineQuestionError = getQuestionError(
-        inlineOtherQuestion,
-        inlineOtherValue
-      );
+  const navigationQuestionKey = inlineOtherQuestion
+    ? inlineOtherQuestion.key
+    : currentQuestion.key;
 
-      if (inlineQuestionError) {
-        setErrorMessage(inlineQuestionError);
-        return;
-      }
+  const nextAnswersMap = {
+    ...answersMap,
+    [currentQuestion.key]: answerValue,
+  };
+
+  if (inlineOtherQuestion) {
+    nextAnswersMap[inlineOtherQuestion.key] = inlineOtherValue;
+  }
+
+  const answers = buildAnswerArray(nextAnswersMap);
+
+  try {
+    setIsSubmitting(true);
+    setErrorMessage("");
+    setSubmitError("");
+    setSaveMessage("");
+
+    // STEP 1: Get next question first
+    const nextData = await getNextQuestion({
+      currentQuestionKey: navigationQuestionKey,
+      answers,
+    });
+
+    // STEP 2: Save in background (do not wait)
+    if (mode === "save") {
+      saveSurveyProgress({
+        sessionId,
+        startedAt,
+        lastQuestionKey: navigationQuestionKey,
+        answers,
+      }).catch(() => {});
     }
 
-    const navigationQuestionKey = inlineOtherQuestion
-      ? inlineOtherQuestion.key
-      : currentQuestion.key;
-
-    const nextAnswersMap = {
-      ...answersMap,
-      [currentQuestion.key]: answerValue,
-    };
-
-    if (inlineOtherQuestion) {
-      nextAnswersMap[inlineOtherQuestion.key] = inlineOtherValue;
-    }
-
-    const answers = buildAnswerArray(nextAnswersMap);
-
-    try {
-      setIsSubmitting(true);
-      setErrorMessage("");
-      setSubmitError("");
-
-      if (mode === "save") {
-        await saveSurveyProgress({
-          sessionId,
-          startedAt,
-          lastQuestionKey: navigationQuestionKey,
-          answers,
-        });
-        setSaveMessage("Progress saved");
-      } else {
-        setSaveMessage("");
-      }
-
-      const nextData = await getNextQuestion({
-        currentQuestionKey: navigationQuestionKey,
+    // STEP 3: Finish survey
+    if (!nextData.nextQuestion) {
+      await submitSurvey({
+        sessionId,
+        startedAt,
         answers,
       });
 
-      if (!nextData.nextQuestion) {
-        await submitSurvey({
-          sessionId,
-          startedAt,
-          answers,
-        });
-
-        setCurrentQuestion(null);
-        setIncomingQuestion(null);
-        setVisibleQuestionKeys(nextData.visibleQuestionKeys || visibleQuestionKeys);
-        setTransitionState("completed");
-        return;
-      }
-
-      setVisibleQuestionKeys(nextData.visibleQuestionKeys || []);
-      setQuestionTrail((previous) =>
-        previous.includes(nextData.nextQuestion.key)
-          ? previous
-          : [...previous, nextData.nextQuestion.key]
-      );
-      setIncomingQuestion(nextData.nextQuestion);
-      setTransitionState("sliding");
-
-      timerRef.current = setTimeout(() => {
-        setCurrentQuestion(nextData.nextQuestion);
-        setIncomingQuestion(null);
-        setTransitionState("idle");
-      }, ANIMATION_MS);
-    } catch (error) {
-      const details = error.details || {};
-      const validationMessage = Array.isArray(details.errors)
-        ? details.errors.join(", ")
-        : error.message;
-
-      setSubmitError(validationMessage);
-    } finally {
-      setIsSubmitting(false);
+      setCurrentQuestion(null);
+      setTransitionState("completed");
+      return;
     }
+
+    // STEP 4: Show next immediately
+    setVisibleQuestionKeys(nextData.visibleQuestionKeys || []);
+    setQuestionTrail((prev) =>
+      prev.includes(nextData.nextQuestion.key)
+        ? prev
+        : [...prev, nextData.nextQuestion.key]
+    );
+
+    setIncomingQuestion(nextData.nextQuestion);
+    setTransitionState("sliding");
+
+    timerRef.current = setTimeout(() => {
+      setCurrentQuestion(nextData.nextQuestion);
+      setIncomingQuestion(null);
+      setTransitionState("idle");
+    }, ANIMATION_MS);
+
+  } catch (error) {
+    setSubmitError(error.message || "Something went wrong");
+  } finally {
+    setIsSubmitting(false);
   }
+}
 
   const inlineOtherQuestion = findInlineOtherQuestion(
     currentQuestion,
