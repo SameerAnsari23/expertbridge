@@ -41,11 +41,23 @@ app.get("/", (req, res) => {
 app.use("/api", surveyRoutes);
 
 // Health route
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    database: "connected",
-  });
+app.get("/api/health", async (req, res) => {
+  try {
+    await connectDB();
+
+    await mongoose.connection.db.admin().ping();
+
+    res.json({
+      ok: true,
+      database: "connected",
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      database: "disconnected",
+      error: error.message,
+    });
+  }
 });
 
 module.exports = app;
