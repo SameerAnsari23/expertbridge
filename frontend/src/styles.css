@@ -568,7 +568,35 @@ input {
     transform: translateX(0);
   }
 }
+.slide-out-right {
+  animation: slideOutRight 0.25s forwards;
+}
 
+.slide-in-left {
+  animation: slideInLeft 0.25s forwards;
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
 @media (max-width: 768px) {
   .app-shell {
     padding: 16px;
