@@ -258,7 +258,15 @@ function QuestionCard({
           {statusText ? <span className="status-pill">{statusText}</span> : null}
         </div>
 
-        <h1 className="question-prompt">{question.prompt}</h1>
+        <h1 className="question-prompt">
+  {question.prompt.replace(" (Select all that apply)", "")}
+  {question.prompt.includes("(Select all that apply)") && (
+    <>
+      <br />
+      <span className="question-helper">(Select all that apply)</span>
+    </>
+  )}
+</h1>
 
         {question.description ? (
           <p className="question-description">{question.description}</p>
@@ -592,6 +600,7 @@ function SurveyPage() {
   const [loading, setLoading] = useState(true);
   const [transitionState, setTransitionState] = useState("idle");
   const [incomingQuestion, setIncomingQuestion] = useState(null);
+  const [isGoingBack, setIsGoingBack] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
@@ -718,7 +727,29 @@ function SurveyPage() {
 
     return String(value ?? "").trim().length > 0;
   }
+  function goBack() {
+  if (!currentQuestion || transitionState !== "idle") return;
 
+  const currentIndex = questionTrail.indexOf(currentQuestion.key);
+
+  if (currentIndex <= 0) return; // already first question
+
+  const previousKey = questionTrail[currentIndex - 1];
+  const previousQuestion = questionMap.get(previousKey);
+
+  if (!previousQuestion) return;
+
+  setIncomingQuestion(previousQuestion);
+  setIsGoingBack(true);
+  setTransitionState("sliding");
+
+  timerRef.current = setTimeout(() => {
+    setCurrentQuestion(previousQuestion);
+    setIncomingQuestion(null);
+    setTransitionState("idle");
+    setIsGoingBack(false);
+  }, ANIMATION_MS);
+}
   async function fetchNextQuestion(mode) {
   if (!currentQuestion || transitionState !== "idle") return;
 
@@ -882,17 +913,26 @@ function SurveyPage() {
 
   const readyForActions = hasAnswer(currentQuestion, currentValue);
   const actionButtons = (
-    <div className="action-row">
-      <button
-        type="button"
-        className="action-button subtle"
-        disabled={isSubmitting || !readyForActions}
-        onClick={() => fetchNextQuestion("save")}
-      >
-        {isSubmitting ? "Saving..." : "Save & Next"}
-      </button>
-    </div>
-  );
+  <div className="action-row">
+    <button
+      type="button"
+      className="action-button secondary"
+      disabled={questionNumber === 1 || isSubmitting}
+      onClick={goBack}
+    >
+      Back
+    </button>
+
+    <button
+      type="button"
+      className="action-button subtle"
+      disabled={isSubmitting || !readyForActions}
+      onClick={() => fetchNextQuestion("save")}
+    >
+      {isSubmitting ? "Saving..." : "Save & Next"}
+    </button>
+  </div>
+);
 
   const incomingQuestionNumber = incomingQuestion
     ? Math.max(visibleScreenKeys.indexOf(incomingQuestion.key) + 1, questionNumber + 1, 1)
@@ -922,7 +962,13 @@ function SurveyPage() {
             errorMessage={errorMessage || submitError}
             statusText={saveMessage}
             actionButtons={actionButtons}
-            animationClass={transitionState === "sliding" ? "slide-out-left" : ""}
+            animationClass={
+  transitionState === "sliding"
+    ? isGoingBack
+      ? "slide-out-right"
+      : "slide-out-left"
+    : ""
+}
             scrollContainerRef={currentScrollRef}
           />
 
@@ -942,7 +988,11 @@ function SurveyPage() {
               errorMessage=""
               statusText=""
               actionButtons={null}
-              animationClass="slide-in-right overlay-card"
+              animationClass={
+  isGoingBack
+    ? "slide-in-left overlay-card"
+    : "slide-in-right overlay-card"
+}
               scrollContainerRef={null}
             />
           ) : null}
